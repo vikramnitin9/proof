@@ -10,11 +10,16 @@ using namespace std;
 
 #define INF 2147483647
 
+int fresh_var_count = 0;
+
 //Class for a variable. Has a unique id.
 class var{
 public:
-	char id;
+	string id;
 	var(char id){
+		this->id += id;
+	}
+	var(string id){
 		this->id = id;
 	}
 };
@@ -199,6 +204,29 @@ public:
 	}
 };
 
+class FRESH: public Pred{
+public:
+	FRESH(){
+		this->verified = nesting;
+		var a("_F" + to_string(fresh_var_count++));
+		this->v.push_back(&a);
+		this->name = "_Fresh" + to_string(fresh_var_count);
+	}
+};
+
+bool substitute(Pred* p, var* x, var* y){
+	bool flag = false;
+	for(int i = 0; i < p->v.size(); ++i){
+		if(cmp(p->v[i], x)){
+			p->v[i] = y;
+			flag = true;
+		}
+	}
+	if(p->p != NULL) substitute(p->p, x, y);
+	if(p->q != NULL) substitute(p->q, x, y);
+	return flag;
+}
+
 //Rules for Natural Deduction in predicate logic
 // p,q |- p^q
 Pred* and_intro(Pred* p, Pred* q){
@@ -309,7 +337,7 @@ Pred* contra_intro(Pred* p, Pred* c){
 }
 
 // for all x p(x) |- p(x0)
-Pred* all_sub(Pred* c, var* a){
+Pred* all_elim(Pred* c, var* a){
 	assert(c->name == "ALL");
 	if(c->is_verified()){
 		Pred* ret = c->p;
@@ -319,6 +347,43 @@ Pred* all_sub(Pred* c, var* a){
 		return ret;
 	}
 	return NULL;
+}
+
+Pred* all_intro(Pred* f, Pred* p, var* x){
+	assert(f->name[0] == '_');
+
+	Pred* p1 = new Pred();
+	*p1 = *p;
+
+	if(!substitute(p1, f->v[0], x))
+		cout << "Error substituting variable\n";
+	return new ALL(x, p1);
+}
+
+Pred* exists_intro(Pred* p, var* t, var* x){
+	assert(p->is_verified());
+
+	Pred* p1 = new Pred();
+	*p1 = *p;
+	substitute(p1, t, x);
+	return new EXISTS(x, p1);
+}
+
+
+Pred* exists_elim(Pred* p, Pred* f, Pred* assume, Pred* X){
+	assert(p->name == "EXISTS");
+	assert(f->name[0] == '_');
+	assert(p->is_verified());
+
+	Pred* p1 = new Pred();
+	*p1 = *assume;
+	if(!substitute(p1, p->a, f->v[0]))
+		cout << "Error substituting variable\n";;
+
+	if(cmp(p1, assume) && X->verified == assume->verified){
+		nesting --;
+		X->verified = nesting;
+	}
 }
 
 //Definitions of common predicates
